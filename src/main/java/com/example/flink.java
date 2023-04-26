@@ -73,3 +73,11 @@ CREATE TABLE my_table (
 
 -- select all rows from the `my_table` table
 SELECT * FROM my_table;
+
+dependencies {
+    implementation("org.apache.flink:flink-table-api-java:1.16.1")
+    implementation("org.apache.flink:flink-table-planner-blink_2.12:1.16.1")
+    implementation("org.apache.flink:flink-connector-filesystem_2.12:1.16.1")
+    implementation("org.apache.flink:flink-s3-fs-hadoop:1.16.1")
+}
+
