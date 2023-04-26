@@ -24,61 +24,75 @@ application {
 
 
 
-import org.apache.flink.api.common.typeinfo.TypeInformation
-import org.apache.flink.api.java.ExecutionEnvironment
-import org.apache.flink.api.java.typeutils.RowTypeInfo
-import org.apache.flink.core.fs.Path
-import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment
-import org.apache.flink.table.api.EnvironmentSettings
-import org.apache.flink.table.api.TableEnvironment
-import org.apache.flink.table.api.bridge.java.StreamTableEnvironment
-import org.apache.flink.table.sources.CsvTableSource
-import org.apache.flink.table.sources.ParquetTableSource
-import org.apache.flink.table.sources.TableSource
-import org.apache.flink.table.types.logical.LogicalType
-import org.apache.flink.table.types.logical.RowType
-import org.apache.flink.types.Row
+import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.java.typeutils.RowTypeInfo;
+import org.apache.flink.core.fs.Path;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.table.api.EnvironmentSettings;
+import org.apache.flink.table.api.Table;
+import org.apache.flink.table.api.TableSchema;
+import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
+import org.apache.flink.table.descriptors.Csv;
+import org.apache.flink.table.descriptors.FileSystem;
+import org.apache.flink.table.descriptors.Schema;
+import org.apache.flink.table.descriptors.StreamTableDescriptor;
+import org.apache.flink.table.sources.CsvTableSource;
+import org.apache.flink.table.sources.TableSource;
+import org.apache.flink.types.Row;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 
-val s3AccessKey = "yourS3AccessKey"
-val s3SecretKey = "yourS3SecretKey"
-val s3Bucket = "yourS3BucketName"
-val s3ObjectKey = "yourS3ObjectKey"  // e.g. "path/to/file.csv"
+import java.io.IOException;
 
-// Define the schema of your CSV file
-val fieldNames = arrayOf("id", "name", "age")
-val fieldTypes = arrayOf<LogicalType>(
-    DataTypes.INT().getLogicalType(),
-    DataTypes.STRING().getLogicalType(),
-    DataTypes.INT().getLogicalType()
-)
-val rowType = RowType(fieldTypes, fieldNames)
+public class ReadFromS3Example {
+    public static void main(String[] args) throws Exception {
+        // Set up the execution environment and table environment
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        EnvironmentSettings settings = EnvironmentSettings.newInstance().useBlinkPlanner().inStreamingMode().build();
+        StreamTableEnvironment tEnv = StreamTableEnvironment.create(env, settings);
 
-// Create a CsvTableSource with the schema and S3 file location
-val csvSource = CsvTableSource.builder()
-    .path("s3a://$s3AccessKey:$s3SecretKey@$s3Bucket/$s3ObjectKey")
-    .ignoreFirstLine()
-    .fieldDelimiter(",")
-    .field("id", Types.INT())
-    .field("name", Types.STRING())
-    .field("age", Types.INT())
-    .build()
+        // Set the S3 access key and secret
+        String accessKey = "<your access key>";
+        String secretKey = "<your secret key>";
+        Configuration hadoopConfig = new Configuration();
+        hadoopConfig.set("fs.s3a.access.key", accessKey);
+        hadoopConfig.set("fs.s3a.secret.key", secretKey);
+        org.apache.hadoop.fs.FileSystem.initialize(hadoopConfig);
 
-// Create an ExecutionEnvironment (or StreamExecutionEnvironment for streaming)
-val env = ExecutionEnvironment.getExecutionEnvironment()
+        // Define the schema for the CSV file
+        String[] fieldNames = {"id", "name", "age"};
+        TypeInformation[] fieldTypes = {Types.INT(), Types.STRING(), Types.INT()};
+        TableSchema schema = new TableSchema(fieldNames, fieldTypes);
+        RowTypeInfo rowTypeInfo = new RowTypeInfo(fieldTypes, fieldNames);
 
-// Create a TableEnvironment
-val settings = EnvironmentSettings.newInstance().useBlinkPlanner().inBatchMode().build()
-val tableEnv = TableEnvironment.create(settings)
+        // Create a CsvTableSource with the schema and S3 file location
+        CsvTableSource csvSource = CsvTableSource.builder()
+                .path("s3a://my-bucket/my-csv-file.csv")
+                .fieldDelimiter(",")
+                .ignoreFirstLine()
+                .ignoreParseErrors()
+                .schema(schema)
+                .build();
 
-// Register the CSV table source with the TableEnvironment
-tableEnv.registerTableSource("my_table", csvSource)
+        // Register the CsvTableSource as a table in the table environment
+        tEnv.registerTableSource("my_table", csvSource);
 
-// Execute a SQL query on the CSV table
-val result = tableEnv.sqlQuery("SELECT * FROM my_table WHERE age > 30")
+        // Query the table using SQL
+        Table result = tEnv.sqlQuery("SELECT name, age FROM my_table WHERE age > 18");
 
-// Convert the result to a DataSet (or DataStream for streaming)
-val typeInfo: TypeInformation<Row> = RowTypeInfo(csvSource.fieldTypes, csvSource.fieldNames)
-val resultSet = tableEnv.toDataSet<Row>(result, typeInfo)
+        // Convert the table to a data stream and print the results
+        DataStream<Row> outputStream = tEnv.toDataStream(result);
+        outputStream.map(new MapFunction<Row, String>() {
+            @Override
+            public String map(Row row) throws Exception {
+                return row.getField(0) + ": " + row.getField(1);
+            }
+        }).print();
 
-// Print the result to the console
-resultSet.print()
+        env.execute("Read from S3 Example");
+    }
+}
+
