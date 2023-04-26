@@ -6,6 +6,36 @@ dependencies {
     implementation 'org.apache.flink:flink-connector-s3:1.12.2'
 }
 
+import org.apache.flink.table.api.EnvironmentSettings;
+import org.apache.flink.table.api.Table;
+import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
+import org.apache.flink.table.descriptors.FileSystem;
+import org.apache.flink.table.descriptors.FormatDescriptor;
+import org.apache.flink.table.descriptors.Schema;
+import org.apache.flink.types.Row;
+
+// set up Flink Table environment
+EnvironmentSettings settings = EnvironmentSettings.newInstance().useBlinkPlanner().inStreamingMode().build();
+StreamTableEnvironment tEnv = StreamTableEnvironment.create(env, settings);
+
+// define schema for the CSV file
+String[] fieldNames = {"id", "name", "age"};
+TypeInformation<?>[] fieldTypes = {Types.INT(), Types.STRING(), Types.INT()};
+Schema schema = new Schema().fields(fieldNames, fieldTypes);
+
+// define format for the CSV file
+FormatDescriptor format = new FormatDescriptor().csv().fieldDelimiter(",");
+
+// create a Flink Table source for the CSV file
+FileSystem fileSystem = new FileSystem().path("s3a://BUCKET_NAME/PATH_TO_FILE.csv");
+tEnv.connect(fileSystem).withFormat(format).withSchema(schema).createTemporaryTable("myTable");
+
+// read the CSV file into a Flink Table
+Table table = tEnv.from("myTable");
+
+// print the table contents
+table.printSchema();
+table.select("*").print();
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.java.typeutils.Types;
