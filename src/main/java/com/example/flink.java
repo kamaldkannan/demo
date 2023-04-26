@@ -39,3 +39,37 @@ tableEnv
 
 // query the table
 tableEnv.sqlQuery("SELECT * FROM myTable").execute().print();
+
+
+
+CREATE TABLE my_table (
+  ...
+) WITH (
+  'connector' = 'filesystem',
+  'path' = 's3://my-bucket/my-file.csv',
+  'format' = 'csv',
+  'csv.field.delimiter' = ',',
+  'csv.allow-comments' = 'true',
+  'csv.ignore-parse-errors' = 'true',
+  'csv.null-literal' = '',
+  'aws.access.key.id' = 'your-access-key-id',
+  'aws.secret.access.key' = 'your-secret-access-key'
+);
+
+
+-- register a table called `my_table` with columns `id` and `name`
+CREATE TABLE my_table (
+  id INT,
+  name STRING
+) WITH (
+  'connector' = 'filesystem',
+  'path' = 's3://my-bucket/my-file.csv',
+  'format' = 'csv',
+  'csv.field.delimiter' = ',',
+  'csv.allow-comments' = 'true',
+  'csv.ignore-parse-errors' = 'true',
+  'csv.null-literal' = ''
+);
+
+-- select all rows from the `my_table` table
+SELECT * FROM my_table;
