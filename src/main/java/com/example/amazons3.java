@@ -1,3 +1,38 @@
+
+// Set up the execution environment
+StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+// Define the source
+DataStream<Tuple4<Integer, String, Integer, String>> myTable = env
+    .readFile(new TextInputFormat(new Path("/path/to/csv/file.csv")), "/path/to/csv/file.csv")
+    .map(new MapFunction<String, Tuple4<Integer, String, Integer, String>>() {
+        @Override
+        public Tuple4<Integer, String, Integer, String> map(String value) throws Exception {
+            String[] tokens = value.split(",");
+            return new Tuple4<Integer, String, Integer, String>(
+                    Integer.parseInt(tokens[0]),
+                    tokens[1],
+                    Integer.parseInt(tokens[2]),
+                    tokens[3]
+            );
+        }
+    });
+
+// Define the schema for the table
+TableSchema schema = TableSchema.builder()
+    .field("id", DataTypes.INT())
+    .field("name", DataTypes.STRING())
+    .field("age", DataTypes.INT())
+    .field("city", DataTypes.STRING())
+    .build();
+
+// Convert the DataStream to a Table
+StreamTableEnvironment tableEnv = StreamTableEnvironment.create(env);
+Table table = tableEnv.fromDataStream(myTable, schema);
+
+// Print the result
+tableEnv.toRetractStream(table, Row.class).print();
+
 import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
