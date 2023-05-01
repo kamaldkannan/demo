@@ -1,4 +1,75 @@
 
+
+import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.java.functions.KeySelector;
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.core.fs.Path;
+import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.source.FileProcessingMode;
+import org.apache.flink.streaming.api.functions.source.FileSource;
+import org.apache.flink.streaming.api.functions.source.FileSource.FileSourceBuilder;
+import org.apache.flink.streaming.api.functions.source.TimestampedFileInputSplit;
+import org.apache.flink.streaming.api.functions.source.TimestampedInputSplitAssigner;
+import org.apache.flink.streaming.api.functions.source.TimestampedInputSplitAssigner.Context;
+import org.apache.flink.streaming.api.functions.source.TimestampedInputSplitAssigner.Provider;
+import org.apache.flink.streaming.api.functions.source.assigners.FileSplitAssigner;
+import org.apache.flink.streaming.api.functions.source.assigners.SerialFileProcessingMode;
+import org.apache.flink.streaming.api.functions.source.assigners.SimpleVersionedSerialization;
+import org.apache.flink.streaming.api.functions.source.assigners.TimestampedFilesSplitter;
+import org.apache.flink.streaming.api.functions.source.assigners.TimestampedFilesSplitter.TimestampedFiles;
+import org.apache.flink.streaming.api.watermark.Watermark;
+
+public class S3CSVReader {
+
+    public static void main(String[] args) throws Exception {
+        
+        // create the execution environment
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        
+        // configure S3 input
+        String s3Path = "s3://your-bucket-name/your-csv-folder/";
+        Path filePath = new Path(s3Path);
+        FileInputFormat<String> inputFormat = new TextInputFormat(filePath);
+        
+        // read CSV files continuously
+        FileSourceBuilder<String> builder = FileSource.forRecordStreamFormat(inputFormat);
+        builder.monitorContinuously(FileProcessingMode.PROCESS_CONTINUOUSLY, 1000);
+        builder.setFilePath(filePath);
+        builder.setDeserializationSchema(inputFormat);
+        builder.setFilesFilter(FileInputFormat.DEFAULT_FILTER);
+        
+        DataStream<String> inputStream = env.addSource(builder.build());
+        
+        // parse CSV data into tuples and group by key
+        DataStream<Tuple2<String, Integer>> counts = inputStream
+            .map(new MapFunction<String, Tuple2<String, Integer>>() {
+                @Override
+                public Tuple2<String, Integer> map(String line) throws Exception {
+                    String[] fields = line.split(",");
+                    String key = fields[0];
+                    int value = Integer.parseInt(fields[1]);
+                    return new Tuple2<>(key, value);
+                }
+            })
+            .keyBy(new KeySelector<Tuple2<String, Integer>, String>() {
+                @Override
+                public String getKey(Tuple2<String, Integer> tuple) throws Exception {
+                    return tuple.f0;
+                }
+            })
+            .sum(1);
+        
+        // print the results
+        counts.print();
+        
+        // execute the job
+        env.execute("S3 CSV Reader");
+    }
+}
+
+
+
 // Set up the execution environment
 StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
