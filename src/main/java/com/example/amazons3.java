@@ -1,4 +1,50 @@
 
+import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.java.DataSet;
+import org.apache.flink.api.java.ExecutionEnvironment;
+import org.apache.flink.api.java.functions.FunctionAnnotation.ForwardedFields;
+import org.apache.flink.api.java.functions.FunctionAnnotation.ReadFields;
+import org.apache.flink.api.java.io.CsvReaderFormat;
+import org.apache.flink.api.java.io.FileInputFormat;
+import org.apache.flink.core.fs.Path;
+import org.apache.flink.streaming.api.functions.source.FileProcessingMode;
+import org.apache.flink.streaming.api.functions.source.FileSource;
+import org.apache.flink.streaming.api.functions.source.FileSource.FileSourceBuilder;
+import org.apache.flink.streaming.api.functions.source.SourceFunction;
+
+public class CsvReaderExample {
+  public static void main(String[] args) throws Exception {
+    ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+
+    CsvReaderFormat<Tuple2<Integer, String>> format = new CsvReaderFormat<>(
+        Tuple2.class,
+        CsvReaderFormat.DEFAULT_FIELD_DELIMITER,
+        CsvReaderFormat.DEFAULT_LINE_DELIMITER,
+        CsvReaderFormat.DEFAULT_IGNORE_FIRST_LINE
+    );
+
+    FileSourceBuilder<Tuple2<Integer, String>, FileSource<Tuple2<Integer, String>>> fileSourceBuilder =
+        FileSource.forRecordFormat(new Path("/path/to/csv/file"), format);
+
+    FileInputFormat.setInputFilePath(fileSourceBuilder, new Path("/path/to/csv/file"));
+    FileInputFormat.setFilesFilter(fileSourceBuilder, FileInputFormat.createDefaultFilter());
+    fileSourceBuilder.setMonitoringFile("");
+
+    FileSource<Tuple2<Integer, String>> fileSource = fileSourceBuilder.build();
+
+    DataSet<Tuple2<Integer, String>> data = env.createInput(fileSource);
+
+    DataSet<String> result = data.map(new MapFunction<Tuple2<Integer, String>, String>() {
+        @Override
+        public String map(Tuple2<Integer, String> value) throws Exception {
+            return value.f1;
+        }
+    });
+
+    result.print();
+  }
+}
+
 
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.functions.KeySelector;
