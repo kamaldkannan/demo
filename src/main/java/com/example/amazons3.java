@@ -1,3 +1,51 @@
+import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.connectors.jdbc.JdbcConnectionOptions;
+import org.apache.flink.streaming.connectors.jdbc.JdbcSink;
+import org.apache.flink.streaming.connectors.jdbc.JdbcStatementBuilder;
+
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
+public class OracleJdbcSinkExample {
+
+    public static void main(String[] args) throws Exception {
+        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        JdbcConnectionOptions jdbcOptions = JdbcConnectionOptions.builder()
+                .setUrl("jdbc:oracle:thin:@//localhost:1521/SID")
+                .setUsername("username")
+                .setPassword("password")
+                .setDriverName("oracle.jdbc.driver.OracleDriver")
+                .build();
+
+        env.fromElements(
+                Tuple2.of(1, "John"),
+                Tuple2.of(2, "Alice"),
+                Tuple2.of(3, "Bob"))
+                .addSink(JdbcSink.sink(
+                        "MERGE INTO mytable USING (SELECT ? AS id, ? AS name FROM dual) src " +
+                                "ON (mytable.id = src.id) " +
+                                "WHEN MATCHED THEN UPDATE SET mytable.name = src.name " +
+                                "WHEN NOT MATCHED THEN INSERT (id, name) VALUES (src.id, src.name)",
+                        new OracleJdbcStatementBuilder(),
+                        jdbcOptions));
+
+        env.execute("Oracle JdbcSink Example");
+    }
+
+    public static class OracleJdbcStatementBuilder implements JdbcStatementBuilder<Tuple2<Integer, String>> {
+        @Override
+        public void accept(PreparedStatement statement, Tuple2<Integer, String> record) throws SQLException {
+            statement.setInt(1, record.f0);
+            statement.setString(2, record.f1);
+        }
+    }
+}
+
+
+
+
 
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.DataSet;
