@@ -1,3 +1,24 @@
+
+$hostsAndPorts = Get-Content -Path ".\hosts.txt" | ConvertFrom-Csv -Header ComputerName, Port
+
+foreach ($entry in $hostsAndPorts) {
+    $host = $entry.ComputerName
+    $port = $entry.Port
+    
+    $result = Test-NetConnection -ComputerName $host -Port $port -ErrorAction SilentlyContinue
+    
+    if ($result.TcpTestSucceeded) {
+        Write-Host "Connection to $host on port $port was successful."
+        Write-Host "RemoteAddress: $($result.RemoteAddress)"
+        Write-Host "RemotePort: $($result.RemotePort)"
+        Write-Host "TcpTestSucceeded: $($result.TcpTestSucceeded)"
+    } else {
+        Write-Host "Connection to $host on port $port failed."
+    }
+    
+    Write-Host "--------------------------"
+}
+
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.connectors.jdbc.JdbcConnectionOptions;
