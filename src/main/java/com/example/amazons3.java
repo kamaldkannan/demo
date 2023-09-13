@@ -1,4 +1,6 @@
+To achieve elite performer status in DORA metrics, it is important to focus on key areas including continuous delivery, deployment frequency, lead time for changes, and time to restore service. Continuous delivery refers to the ability to release code changes frequently, whereas deployment frequency measures how often code changes are deployed successfully. Lead time for changes measures the time it takes to go from an idea to a deployed change, and time to restore service measures how quickly service can be restored after an incident.
 
+To become an elite performer in these metrics, organizations should prioritize automation, monitoring, and proactive problem-solving. Automation helps streamline the software delivery process, reducing manual errors and increasing reliability. Monitoring enables teams to quickly identify and diagnose issues, allowing for faster resolution. Proactive problem-solving involves using data and analytics to predict and prevent potential problems before they occur.
 $hostsAndPorts = Get-Content -Path ".\hosts.txt" | ConvertFrom-Csv -Header ComputerName, Port
 
 foreach ($entry in $hostsAndPorts) {
