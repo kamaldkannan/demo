@@ -19,6 +19,41 @@ public class SftpScheduledExample {
         startUploadWorker();
     }
 
+   public static void main(String[] args) {
+        String sftpUrl = "sftp://username:password@hostname/directory/";
+        String localDirectoryPath = "/path/to/local/directory";
+
+        try (FileSystemManager fsManager = VFS.getManager()) {
+            FileObject remoteDir = fsManager.resolveFile(sftpUrl);
+
+            if (remoteDir.exists() && remoteDir.getType() == FileType.FOLDER) {
+                FileObject[] files = remoteDir.getChildren();
+                for (FileObject file : files) {
+                    System.out.println("File: " + file.getName().getBaseName());
+                    downloadFile(file, localDirectoryPath);
+                }
+            }
+        } catch (FileSystemException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void downloadFile(FileObject remoteFile, String localDirectoryPath) {
+        try {
+            FileObject localDir = VFS.getManager().resolveFile("file://" + localDirectoryPath);
+            FileObject localFile = localDir.resolveFile(remoteFile.getName().getBaseName());
+            FileUtil.copyContent(remoteFile, localFile);
+        } catch (FileSystemException e) {
+            e.printStackTrace();
+        }
+    }
+ private FileSystemOptions createDefaultOptions() throws FileSystemException {
+        FileSystemOptions opts = new FileSystemOptions();
+        SftpFileSystemConfigBuilder.getInstance().setStrictHostKeyChecking(opts, "no");
+        SftpFileSystemConfigBuilder.getInstance().setUserDirIsRoot(opts, false);
+        SftpFileSystemConfigBuilder.getInstance().setIdentities(opts, new File[]{new File(privateKeyFilePath)});
+        return opts;
+    }
     private void startDownloadWorker() {
         new Thread(() -> {
             while (true) {
