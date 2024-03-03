@@ -1,0 +1,113 @@
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.jcraft.jsch.*;
+
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.io.File;
+import java.util.Vector;
+import java.util.concurrent.*;
+
+@Component
+@EnableScheduling
+public class SftpAndS3ScheduledTask {
+    private static final String HOST = "hostname";
+    private static final String USER = "username";
+    private static final String PASSWORD = "password";
+    private static final int PORT = 22;
+    private static final int MAX_RETRIES = 3;
+
+    private static final String BUCKET_NAME = "your-s3-bucket-name";
+    private static final String S3_PREFIX = "s3-folder-prefix/";
+
+    private BlockingQueue<File> fileQueue = new LinkedBlockingQueue<>();
+    private ExecutorService executorService = Executors.newFixedThreadPool(5); // Use a fixed number of threads
+
+    @Scheduled(fixedRate = 60000) // Run every 1 minute (60000 milliseconds)
+    public void downloadFromSftp() {
+        JSch jsch = new JSch();
+        Session session = null;
+        ChannelSftp sftpChannel = null;
+
+        try {
+            session = jsch.getSession(USER, HOST, PORT);
+            session.setConfig("StrictHostKeyChecking", "no");
+            session.setPassword(PASSWORD);
+            session.connect();
+
+            sftpChannel = (ChannelSftp) session.openChannel("sftp");
+            sftpChannel.connect();
+
+            String remoteDir = "/path/to/directory/";
+            sftpChannel.cd(remoteDir);
+
+            // List all files in the directory
+            Vector<ChannelSftp.LsEntry> files = sftpChannel.ls("*");
+            for (ChannelSftp.LsEntry file : files) {
+                if (file.getAttrs().isDir()) {
+                    continue; // Skip directories
+                }
+                String fileName = file.getFilename();
+                System.out.println("Downloading file: " + fileName);
+
+                // Download the file
+                int retries = 0;
+                boolean success = false;
+                while (!success && retries < MAX_RETRIES) {
+                    try {
+                        File localFile = File.createTempFile("temp-", ".tmp");
+                        sftpChannel.get(fileName, localFile.getAbsolutePath());
+                        fileQueue.put(localFile);
+                        success = true;
+                    } catch (Exception e) {
+                        retries++;
+                        System.out.println("Failed to download file: " + fileName + ". Retrying...");
+                        Thread.sleep(1000); // Wait before retrying
+                    }
+                }
+
+                if (!success) {
+                    System.out.println("Failed to download file: " + fileName + " after " + MAX_RETRIES + " retries.");
+                }
+            }
+
+        } catch (JSchException | SftpException | InterruptedException e) {
+            e.printStackTrace();
+        } finally {
+            if (sftpChannel != null) {
+                sftpChannel.exit();
+            }
+            if (session != null) {
+                session.disconnect();
+            }
+        }
+    }
+
+    @Scheduled(fixedRate = 60000) // Run every 1 minute (60000 milliseconds)
+    public void uploadToS3() {
+        AmazonS3 s3Client = AmazonS3ClientBuilder.defaultClient();
+
+        while (!fileQueue.isEmpty()) {
+            try {
+                File file = fileQueue.take();
+                String key = S3_PREFIX + file.getName();
+                System.out.println("Adding file to upload queue: " + key);
+
+                executorService.submit(() -> {
+                    try {
+                        System.out.println("Uploading file to S3: " + key);
+                        s3Client.putObject(new PutObjectRequest(BUCKET_NAME, key, file));
+                        file.delete(); // Delete the local file after upload
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
