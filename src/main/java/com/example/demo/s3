@@ -1,3 +1,83 @@
+import org.apache.commons.vfs2.*;
+import org.apache.commons.vfs2.provider.sftp.SftpFileSystemConfigBuilder;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+
+@Component
+@EnableScheduling
+public class SftpScheduledExample {
+
+    private BlockingQueue<FileObject> downloadQueue = new LinkedBlockingQueue<>();
+    private BlockingQueue<FileObject> uploadQueue = new LinkedBlockingQueue<>();
+
+    public SftpScheduledExample() {
+        startDownloadWorker();
+        startUploadWorker();
+    }
+
+    private void startDownloadWorker() {
+        new Thread(() -> {
+            while (true) {
+                try {
+                    FileObject file = downloadQueue.take();
+                    downloadFile(file);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }).start();
+    }
+
+    private void startUploadWorker() {
+        new Thread(() -> {
+            while (true) {
+                try {
+                    FileObject file = uploadQueue.take();
+                    uploadFile(file);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }).start();
+    }
+
+    @Scheduled(fixedRate = 60000) // Run every 1 minute (60000 milliseconds)
+    public void performSftpOperation() {
+        String sftpUrl = "sftp://username:password@hostname/directory/";
+
+        try (FileSystemManager fsManager = VFS.getManager()) {
+            FileObject remoteDir = fsManager.resolveFile(sftpUrl);
+
+            if (remoteDir.exists() && remoteDir.getType() == FileType.FOLDER) {
+                FileObject[] files = remoteDir.getChildren();
+                for (FileObject file : files) {
+                    System.out.println("File: " + file.getName().getBaseName());
+                    downloadQueue.offer(file);
+                    uploadQueue.offer(file);
+                }
+            }
+        } catch (FileSystemException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void downloadFile(FileObject remoteFile) {
+        // Implement download logic
+    }
+
+    private void uploadFile(FileObject localFile) {
+        // Implement upload logic
+    }
+}
+
+
+
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.PutObjectRequest;
